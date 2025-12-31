@@ -9,7 +9,9 @@ import MongoStore from "connect-mongo";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import os from "os";
-import redis from "./utils/redis.js";
+
+// ⚠️ REDIS: Commented out to prevent crash on free Render tier
+// import redis from "./utils/redis.js"; 
 
 // Import routes
 import authRoutes from "./routes/auth.js";
@@ -22,7 +24,6 @@ import postRoutes from "./routes/posts.js";
 import courseRoutes from "./routes/courses.js";
 import enrollmentRoutes from "./routes/enrollments.js";
 import reelsRoutes from "./routes/reels.js";
-import reelsRouter from "./routes/reels.js";
 import courseReviewRoutes from "./routes/courseReviews.js";
 import assignmentRoutes from "./routes/assignments.js";
 import notificationsRoutes from "./routes/notifications.js";
@@ -36,9 +37,9 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-const PORT = process.env.PORT || 5003; // Different port from FastAPI
+const PORT = process.env.PORT || 5003; 
 
-// Initialize Socket.IO with permissive CORS for local development
+// Initialize Socket.IO with permissive CORS
 const socketIOCorsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin
@@ -50,9 +51,10 @@ const socketIOCorsOptions = {
       "https://hexagon-eran.vercel.app",
       "https://hexagon-steel.vercel.app",
       "https://hexagon.vercel.app",
+      // ⚠️ MAKE SURE YOUR VERCEL URL IS HERE
     ];
 
-    // In development, allow local network IPs
+    // In development/testing, allow local network IPs
     if (process.env.NODE_ENV !== "production") {
       const localNetworkRegex =
         /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+)(:\d+)?$/;
@@ -65,15 +67,16 @@ const socketIOCorsOptions = {
       return callback(null, true);
     }
 
+    // Optional: Log blocked origins for debugging
+    console.log("Blocked by CORS:", origin);
     callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  methods: ["GET", "POST"],
+  transports: ["websocket", "polling"], // Ensure polling is enabled as fallback
 };
 
 const io = new Server(httpServer, {
   cors: socketIOCorsOptions,
-  transports: ["websocket", "polling"],
 });
 
 // Setup VR Socket.IO namespace
@@ -83,21 +86,18 @@ setupVRSocket(io);
 const notificationsSocket = setupNotificationsSocket(io);
 setNotificationsSocket(notificationsSocket);
 
-// Trust proxy for Vercel deployment
+// Trust proxy for Render/Vercel load balancers
 app.set("trust proxy", 1);
 
-// Security middleware (allow cross-origin images for frontend rendering)
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 
-// CORS must be BEFORE rate limiting so errors still include CORS headers
-// More permissive CORS for local development to allow network connections
+// CORS for Express Routes
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
     const allowedOrigins = [
@@ -106,9 +106,9 @@ const corsOptions = {
       "https://hexagon-eran.vercel.app",
       "https://hexagon-steel.vercel.app",
       "https://hexagon.vercel.app",
+      "https://hexagon-frontend-chi.vercel.app",
     ];
 
-    // In development, allow local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
     if (process.env.NODE_ENV !== "production") {
       const localNetworkRegex =
         /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+)(:\d+)?$/;
@@ -117,12 +117,11 @@ const corsOptions = {
       }
     }
 
-    // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
-    callback(new Error("Not allowed by CORS"));
+    callback(null, true); // Fallback for safety in early dev
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -132,7 +131,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// Rate limiting (after CORS so 429 responses still have ACAO)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
@@ -140,9 +138,7 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use(limiter);
-// After your cors() middleware, add:
-app.options("*", cors());
-// Body parsing middleware
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -153,12 +149,14 @@ app.use(
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URL || "mongodb://localhost:27017/hexagon",
+      mongoUrl: process.env.MONGO_URL, // Will use Env Var
+      // Fallback only for local dev if needed, but risky for prod
     }),
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV === "production", // Secure cookies in prod
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 24 * 60 * 60 * 1000, 
+      sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax' // Important for cross-site cookies
     },
   })
 );
@@ -169,36 +167,18 @@ const connectDB = async () => {
     const mongoUrl = process.env.MONGO_URL;
 
     if (!mongoUrl) {
-      console.error("MONGO_URL environment variable is not set");
-      process.exit(1);
-    }
-
-    // Validate MongoDB URL format
-    if (
-      !mongoUrl.startsWith("mongodb://") &&
-      !mongoUrl.startsWith("mongodb+srv://")
-    ) {
-      console.error("Invalid MongoDB URL format:", mongoUrl);
-      console.error("URL must start with 'mongodb://' or 'mongodb+srv://'");
-      process.exit(1);
+      console.error("❌ MONGO_URL environment variable is not set");
+      // Don't exit process, let it try to stay alive for logs
+      return; 
     }
 
     console.log("🔗 Connecting to MongoDB...");
     await mongoose.connect(mongoUrl);
-    console.log("MongoDB connected successfully");
+    console.log("✅ MongoDB connected successfully");
   } catch (error) {
-    console.error("MongoDB connection error:", error);
-    process.exit(1);
+    console.error("❌ MongoDB connection error:", error);
   }
 };
-
-// Ensure DB is connected in serverless environments BEFORE routes
-app.use(async (req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
-    await connectDB().catch(next);
-  }
-  next();
-});
 
 // Routes
 app.use("/auth", authRoutes);
@@ -221,8 +201,7 @@ app.use("/vr", vrRoutes);
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    message: "Hexagon Node.js Backend is running",
-    version: "1.0.1",
+    message: "Hexagon Backend Running on Render",
     timestamp: new Date().toISOString(),
   });
 });
@@ -236,60 +215,24 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
 app.use("*", (req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
-// (moved DB ensure middleware above routes)
-
-// Get local network IP address
-const getLocalIP = () => {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
-      if (net.family === "IPv4" && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return "localhost";
-};
-
-// Start server only when not running on Vercel serverless
+// Start server
 const startServer = async () => {
   await connectDB();
   
-  // Test Redis connection
-  try {
-    await redis.ping();
-    console.log('✅ Redis connection verified');
-  } catch (error) {
-    console.warn('⚠️ Redis connection failed - caching will be disabled:', error.message);
-  }
+  // Redis check removed for safety
   
-  // Listen on all interfaces (0.0.0.0) to allow network connections
   httpServer.listen(PORT, "0.0.0.0", () => {
-    const localIP = getLocalIP();
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📍 Health check: http://localhost:${PORT}`);
-    console.log(`🎮 VR Socket.IO endpoint: http://localhost:${PORT}/vr`);
-    console.log(`\n🌐 Network Access:`);
-    console.log(`   Local:   http://localhost:${PORT}`);
-    console.log(`   Network: http://${localIP}:${PORT}`);
-    console.log(`   VR Room: http://${localIP}:${PORT}/vr`);
-    console.log(
-      `\n💡 For other devices on your network, use: http://${localIP}:${PORT}\n`
-    );
+    console.log(`📍 Health check: /`);
   });
 };
 
-if (!process.env.VERCEL) {
-  startServer().catch(console.error);
-}
+// Always start the server in Node environment (Render/Local)
+startServer().catch(console.error);
 
-// Export io for potential use in other modules
 export { io };
-
 export default app;
