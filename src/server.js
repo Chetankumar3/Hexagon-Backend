@@ -42,7 +42,7 @@ const PORT = process.env.PORT || 5003;
 // Initialize Socket.IO with permissive CORS
 const socketIOCorsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
     const allowedOrigins = [
@@ -51,9 +51,20 @@ const socketIOCorsOptions = {
       "https://hexagon-eran.vercel.app",
       "https://hexagon-steel.vercel.app",
       "https://hexagon.vercel.app",
-      "https://hexagon-frontend-chi.vercel.app/",
-      // ⚠️ MAKE SURE YOUR VERCEL URL IS HERE
+      "https://hexagon-frontend-chi.vercel.app", // FIXED: Removed trailing slash
     ];
+
+    // Check exact matches
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Check Vercel Preview Deployments (allows any hexagon-frontend-*.vercel.app)
+    // This fixes issues when Vercel generates unique URLs for each commit
+    const vercelPreviewRegex = /^https:\/\/hexagon-frontend-.*\.vercel\.app$/;
+    if (vercelPreviewRegex.test(origin)) {
+      return callback(null, true);
+    }
 
     // In development/testing, allow local network IPs
     if (process.env.NODE_ENV !== "production") {
@@ -64,16 +75,11 @@ const socketIOCorsOptions = {
       }
     }
 
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Optional: Log blocked origins for debugging
-    console.log("Blocked by CORS:", origin);
+    console.log("🚫 Blocked by CORS:", origin);
     callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  transports: ["websocket", "polling"], // Ensure polling is enabled as fallback
+  transports: ["websocket", "polling"],
 };
 
 const io = new Server(httpServer, {
