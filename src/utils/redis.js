@@ -210,16 +210,55 @@
 
 // src/utils/redis.js (Safe Version)
 
+// src/utils/redis.js
+
+console.log("⚠️ Redis disabled: Using robust dummy mocks");
+
+// 1. Mock the main Redis client (Default export)
 const redis = {
+  connect: async () => {},
+  disconnect: async () => {},
+  on: () => {},
+  isOpen: false,
   get: async () => null,
   set: async () => null,
   del: async () => null,
-  ping: async () => "pong",
-  on: () => {},
-  connect: async () => {},
-  isOpen: false
+  ping: async () => 'pong',
 };
 
-console.log("⚠️ Redis module disabled for Render Free Tier");
+// 2. Mock the 'cache' helper (Named export)
+export const cache = {
+  get: async () => null,
+  set: async () => null,
+  del: async () => null,
+  
+  // CRITICAL: This mocks the "getOrSet" pattern.
+  // Instead of caching, it just runs the fetch function immediately.
+  // This ensures your app actually gets data from MongoDB!
+  getOrSet: async (key, ttl, fetchFn) => {
+    // Handle case: getOrSet(key, fetchFn) - 2 args
+    if (typeof ttl === 'function') {
+        return await ttl();
+    }
+    // Handle case: getOrSet(key, ttl, fetchFn) - 3 args
+    if (typeof fetchFn === 'function') {
+        return await fetchFn();
+    }
+    return null;
+  },
+};
+
+// 3. Mock 'cacheKeys' (Named export)
+// We use a Proxy to catch ANY key your app tries to access (e.g. cacheKeys.USER_PROFILE)
+// and prevent it from crashing with "undefined" errors.
+export const cacheKeys = new Proxy({}, {
+  get: (target, prop) => {
+    // Return a dummy function in case the key is used like: cacheKeys.USER(id)
+    const mockKeyFn = () => "dummy-key";
+    // Also allow it to be used as a string
+    mockKeyFn.toString = () => "dummy-key";
+    return mockKeyFn;
+  }
+});
 
 export default redis;
