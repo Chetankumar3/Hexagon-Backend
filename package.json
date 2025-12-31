@@ -1,0 +1,62 @@
+{
+  "name": "hexagon-nodejs-backend",
+  "version": "1.0.0",
+  "description": "Node.js backend for Hexagon Professional Interview System",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "build": "echo 'Build completed - no build step required for Node.js'",
+    "prod": "NODE_ENV=production node src/server.js",
+    "vercel-build": "echo 'Vercel build completed'",
+    "seed:courses": "node src/scripts/seedCourses.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "mongodb",
+    "authentication",
+    "todo",
+    "profile"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^1.28.0",
+    "@google/generative-ai": "^0.24.1",
+    "@tavily/core": "^0.5.12",
+    "bcryptjs": "^2.4.3",
+    "connect-mongo": "^5.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-session": "^1.17.3",
+    "express-validator": "^7.0.1",
+    "groq-sdk": "^0.34.0",
+    "helmet": "^7.1.0",
+    "i18next": "^25.6.0",
+    "ioredis": "^5.8.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.3",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.7.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-local": "^1.0.0",
+    "pdfjs-dist": "^5.4.149",
+    "react-i18next": "^16.2.4",
+    "socket.io": "^4.8.1",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
