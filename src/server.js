@@ -51,6 +51,7 @@ const socketIOCorsOptions = {
       "https://hexagon-eran.vercel.app",
       "https://hexagon-steel.vercel.app",
       "https://hexagon.vercel.app",
+      "https://hexagon-frontend-chi.vercel.app/",
       // ⚠️ MAKE SURE YOUR VERCEL URL IS HERE
     ];
 
